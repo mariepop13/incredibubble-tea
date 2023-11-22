@@ -10,14 +10,7 @@ from langchain.llms import OpenAI
 from langchain.chains.question_answering import load_qa_chain
 from langchain.callbacks import get_openai_callback
 import os
-
-# Liste des modèles de langage OpenAI disponibles
-MODELS = {
-    "gpt-3.5-turbo-1106": "gpt-3.5-turbo-1106",
-    "gpt-4-1106-preview": "gpt-4-1106-preview",
-    # Ajoutez d'autres modèles ici
-}
-
+ 
 # Contenu de la barre latérale
 with st.sidebar:
     st.title('🤗💬 Application de chat LLM')
@@ -31,64 +24,62 @@ with st.sidebar:
     ''')
     add_vertical_space(5)
     st.write('Créé avec ❤️ par [mariepop13](https://youtube.com/@engineerprompt)')
-
-    # Sélection du modèle de langage
-    model_choice = st.selectbox("Choisissez le modèle de langage OpenAI", list(MODELS.values()))
-
-    # Sélection du nombre maximum de tokens en entrée
-    max_input_tokens = st.number_input("Nombre maximum de tokens en entrée", min_value=1, value=4096)
-
-    # Sélection du nombre maximum de tokens en sortie
-    max_output_tokens = st.number_input("Nombre maximum de tokens en sortie", min_value=1, value=4096)
-
+ 
 load_dotenv()
-
+ 
 def main():
     st.header("Chat avec un fichier PDF 💬")
-
+ 
+ 
     # Télécharger un fichier PDF
     pdf = st.file_uploader("Téléchargez votre PDF", type='pdf')
-
+ 
+    # st.write(pdf)
     if pdf is not None:
         pdf_reader = PdfReader(pdf)
         
         text = ""
         for page in pdf_reader.pages:
             text += page.extract_text()
-
+ 
         text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=1000,
             chunk_overlap=200,
             length_function=len
-        )
+            )
         chunks = text_splitter.split_text(text=text)
-
+ 
+        # # embeddings
         nom_fichier = pdf.name[:-4]
         st.write(f'{nom_fichier}')
-
+        # st.write(chunks)
+ 
         if os.path.exists(f"{nom_fichier}.pkl"):
             with open(f"{nom_fichier}.pkl", "rb") as f:
                 VectorStore = pickle.load(f)
+            # st.write('Embeddings Loaded from the Disk')s
         else:
-            model_name = next(key for key, value in MODELS.items() if value == model_choice)
-            embeddings = OpenAIEmbeddings(model_name=model_name)
+            embeddings = OpenAIEmbeddings()
             VectorStore = FAISS.from_texts(chunks, embedding=embeddings)
             with open(f"{nom_fichier}.pkl", "wb") as f:
                 pickle.dump(VectorStore, f)
-
+ 
+        # embeddings = OpenAIEmbeddings()
+        # VectorStore = FAISS.from_texts(chunks, embedding=embeddings)
+ 
+        # Accepter les questions/requêtes de l'utilisateur
         query = st.text_input("Posez des questions sur votre fichier PDF :")
-
+        # st.write(query)
+ 
         if query:
             docs = VectorStore.similarity_search(query=query, k=3)
-
-            llm = OpenAI(model_name=model_name)
+ 
+            llm = OpenAI()
             chain = load_qa_chain(llm=llm, chain_type="stuff")
-            chain.set_max_input_tokens(max_input_tokens)  # Nombre maximum de tokens en entrée
-            chain.set_max_output_tokens(max_output_tokens)  # Nombre maximum de tokens en sortie
             with get_openai_callback() as cb:
                 response = chain.run(input_documents=docs, question=query)
                 print(cb)
             st.write(response)
-
+ 
 if __name__ == '__main__':
     main()
